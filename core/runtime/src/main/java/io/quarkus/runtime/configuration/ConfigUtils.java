@@ -1,28 +1,12 @@
 package io.quarkus.runtime.configuration;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Serializable;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
-import java.util.SortedSet;
-import java.util.TreeMap;
-import java.util.TreeSet;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.IntFunction;
 import java.util.regex.Pattern;
@@ -68,9 +52,16 @@ public final class ConfigUtils {
     public static SmallRyeConfigBuilder configBuilder(final boolean runTime, final boolean addDiscovered) {
         final SmallRyeConfigBuilder builder = new SmallRyeConfigBuilder();
         final ApplicationPropertiesConfigSource.InFileSystem inFileSystem = new ApplicationPropertiesConfigSource.InFileSystem();
+        final ApplicationPropertiesConfigSource.InFileSystem inFileProfileSystem = new ApplicationPropertiesConfigSource.InFileSystem(
+                ProfileManager.getActiveProfile());
         final ApplicationPropertiesConfigSource.InJar inJar = new ApplicationPropertiesConfigSource.InJar();
+        final ApplicationPropertiesConfigSource.InJar inJarProfile = new ApplicationPropertiesConfigSource.InJar(
+                ProfileManager.getActiveProfile());
         final ApplicationPropertiesConfigSource.MpConfigInJar mpConfig = new ApplicationPropertiesConfigSource.MpConfigInJar();
-        builder.withSources(inFileSystem, inJar, mpConfig, new DotEnvConfigSource());
+        final ApplicationPropertiesConfigSource.MpConfigInJar mpConfigProfile = new ApplicationPropertiesConfigSource.MpConfigInJar(
+                ProfileManager.getActiveProfile());
+        builder.withSources(inFileSystem, inJar, mpConfig, mpConfigProfile, inFileProfileSystem, inJarProfile,
+                new DotEnvConfigSource());
         builder.withProfile(ProfileManager.getActiveProfile());
         builder.addDefaultInterceptors();
         final ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
@@ -123,10 +114,9 @@ public final class ConfigUtils {
     }
 
     static class EnvConfigSource implements ConfigSource, Serializable {
+        static final Pattern REP_PATTERN = Pattern.compile("[^a-zA-Z0-9_]");
         private static final String NULL_SENTINEL = new String(""); //must be a new string, used for == comparison
         private static final long serialVersionUID = 8786096039970882529L;
-
-        static final Pattern REP_PATTERN = Pattern.compile("[^a-zA-Z0-9_]");
         private final Map<String, String> cache = new ConcurrentHashMap<>(); //the regex match is expensive
 
         EnvConfigSource() {
